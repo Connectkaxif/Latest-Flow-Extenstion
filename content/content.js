@@ -1,6 +1,7 @@
 /**
  * Google Flow Automation Pro - Content Script
  * Handles DOM interaction, prompt submission, and image detection
+ * UPDATED: Fixed generate button detection and clicking
  */
 
 (function() {
@@ -8,62 +9,72 @@
   
   // ============================================
   // CONFIGURATION - SELECTORS
-  // These may need adjustment based on actual website structure
+  // Updated based on actual Google Flow interface
   // ============================================
   const SELECTORS = {
-    // Input field selectors (try multiple options)
+    // Input field selectors - the textarea at the bottom of the page
     promptInput: [
-      'textarea[placeholder*="prompt"]',
-      'textarea[placeholder*="Prompt"]',
-      'textarea[placeholder*="describe"]',
-      'textarea[placeholder*="Describe"]',
-      'input[type="text"][placeholder*="prompt"]',
-      'div[contenteditable="true"]',
+      // Google Flow specific selectors
+      'textarea[class*="prompt"]',
+      'textarea[class*="input"]',
+      'div[contenteditable="true"][class*="prompt"]',
+      'div[contenteditable="true"][class*="input"]',
+      '[role="textbox"]',
+      // Generic fallbacks
       'textarea',
-      '[data-testid="prompt-input"]',
-      '.prompt-input',
-      '#prompt-input'
+      'div[contenteditable="true"]',
+      'input[type="text"]'
     ],
     
-    // Generate button selectors
+    // Generate/Send button selectors - the arrow button (→) on the right
     generateButton: [
+      // Arrow/Send button specific selectors
+      'button[aria-label*="Send"]',
+      'button[aria-label*="send"]',
+      'button[aria-label*="Submit"]',
+      'button[aria-label*="submit"]',
       'button[aria-label*="Generate"]',
       'button[aria-label*="generate"]',
-      'button:contains("Generate")',
+      'button[aria-label*="Create"]',
+      'button[aria-label*="create"]',
+      // Material icon buttons
+      'button[class*="send"]',
+      'button[class*="submit"]',
+      'button[class*="arrow"]',
+      // Button with arrow icon (SVG or material icon)
+      'button svg[class*="arrow"]',
+      'button mat-icon',
+      'button .material-icons',
+      // Generic submit buttons near input
+      'form button[type="submit"]',
       'button[type="submit"]',
-      '[data-testid="generate-button"]',
-      '.generate-button',
-      '#generate-button',
-      'button.primary',
-      'button[class*="generate"]'
+      // Last resort - look for buttons with arrow symbols
+      'button'
     ],
     
     // Image output container selectors
     imageContainer: [
-      '[data-testid="generated-images"]',
-      '.generated-images',
-      '.image-output',
-      '.output-images',
+      '[class*="generated"]',
+      '[class*="output"]',
+      '[class*="result"]',
       '[class*="image-grid"]',
-      '[class*="output"]'
+      '[class*="gallery"]',
+      '[class*="preview"]',
+      'main [class*="image"]'
     ],
     
     // Individual image selectors
     generatedImage: [
       'img[src^="blob:"]',
       'img[src^="data:"]',
+      'img[src*="googleusercontent"]',
+      'img[src*="generated"]',
       'img[class*="generated"]',
       'img[class*="output"]',
-      '.image-container img',
-      '[data-testid="generated-image"] img'
-    ],
-    
-    // Output count selector
-    outputCountSelector: [
-      '[data-testid="output-count"]',
-      'select[name="count"]',
-      '.output-count select',
-      'input[type="number"][name*="count"]'
+      'img[class*="result"]',
+      '[class*="image-container"] img',
+      '[class*="output"] img',
+      '[class*="result"] img'
     ]
   };
   
@@ -76,16 +87,48 @@
     settings: {},
     observer: null,
     lastImageCount: 0,
-    detectedImages: new Set()
+    detectedImages: new Set(),
+    submissionCount: 0
   };
   
   // ============================================
   // INITIALIZATION
   // ============================================
   function initialize() {
-    console.log('🎨 Google Flow Automation Pro - Content Script Loaded');
+    console.log('🎨 Google Flow Automation Pro - Content Script Loaded v2.0');
+    console.log('📍 Current URL:', window.location.href);
     setupImageObserver();
     setupMessageListener();
+    
+    // Debug: Log found elements on page load
+    setTimeout(() => {
+      debugPageElements();
+    }, 2000);
+  }
+  
+  function debugPageElements() {
+    console.log('🔍 Debug: Scanning page elements...');
+    
+    // Find all textareas
+    const textareas = document.querySelectorAll('textarea');
+    console.log(`Found ${textareas.length} textarea(s):`, textareas);
+    
+    // Find all contenteditable
+    const editables = document.querySelectorAll('[contenteditable="true"]');
+    console.log(`Found ${editables.length} contenteditable element(s):`, editables);
+    
+    // Find all buttons
+    const buttons = document.querySelectorAll('button');
+    console.log(`Found ${buttons.length} button(s)`);
+    
+    // Log buttons with their aria-labels
+    buttons.forEach((btn, i) => {
+      const ariaLabel = btn.getAttribute('aria-label');
+      const text = btn.textContent?.trim().substring(0, 30);
+      if (ariaLabel || text) {
+        console.log(`  Button ${i}: aria-label="${ariaLabel}", text="${text}"`);
+      }
+    });
   }
   
   // ============================================
@@ -99,7 +142,7 @@
   }
   
   async function handleMessage(message, sender, sendResponse) {
-    console.log('Content script received:', message.type);
+    console.log('📩 Content script received:', message.type);
     
     switch (message.type) {
       case 'PING':
@@ -107,8 +150,8 @@
         break;
         
       case 'SUBMIT_PROMPT':
-        await submitPrompt(message.prompt, message.index, message.settings);
-        sendResponse({ success: true });
+        const result = await submitPrompt(message.prompt, message.index, message.settings);
+        sendResponse({ success: result });
         break;
         
       case 'DOWNLOAD_BLOB':
@@ -126,194 +169,383 @@
         sendResponse({ success: true });
         break;
         
+      case 'DEBUG':
+        debugPageElements();
+        sendResponse({ success: true });
+        break;
+        
       default:
         sendResponse({ success: false, error: 'Unknown message type' });
     }
   }
   
   // ============================================
-  // DOM UTILITIES
+  // SMART ELEMENT FINDING
   // ============================================
-  function findElement(selectorList) {
-    for (const selector of selectorList) {
+  function findInputElement() {
+    console.log('🔎 Looking for input element...');
+    
+    // Strategy 1: Try direct selectors
+    for (const selector of SELECTORS.promptInput) {
       try {
-        // Handle :contains pseudo-selector
-        if (selector.includes(':contains(')) {
-          const match = selector.match(/(.+):contains\("(.+)"\)/);
-          if (match) {
-            const [, baseSelector, text] = match;
-            const elements = document.querySelectorAll(baseSelector);
-            for (const el of elements) {
-              if (el.textContent.includes(text)) {
-                return el;
-              }
-            }
-          }
-        } else {
-          const element = document.querySelector(selector);
-          if (element && isElementVisible(element)) {
-            return element;
+        const elements = document.querySelectorAll(selector);
+        for (const el of elements) {
+          if (isElementVisible(el) && isValidInputElement(el)) {
+            console.log('✅ Found input via selector:', selector);
+            return el;
           }
         }
-      } catch (error) {
-        // Invalid selector, try next
+      } catch (e) {
         continue;
       }
     }
+    
+    // Strategy 2: Find by position (bottom of page)
+    const textareas = document.querySelectorAll('textarea');
+    if (textareas.length > 0) {
+      // Get the textarea closest to the bottom of the viewport
+      let bottomMost = null;
+      let maxY = 0;
+      textareas.forEach(ta => {
+        const rect = ta.getBoundingClientRect();
+        if (rect.y > maxY && isElementVisible(ta)) {
+          maxY = rect.y;
+          bottomMost = ta;
+        }
+      });
+      if (bottomMost) {
+        console.log('✅ Found input at bottom of page');
+        return bottomMost;
+      }
+    }
+    
+    // Strategy 3: Find contenteditable at bottom
+    const editables = document.querySelectorAll('[contenteditable="true"], [role="textbox"]');
+    if (editables.length > 0) {
+      let bottomMost = null;
+      let maxY = 0;
+      editables.forEach(el => {
+        const rect = el.getBoundingClientRect();
+        if (rect.y > maxY && isElementVisible(el)) {
+          maxY = rect.y;
+          bottomMost = el;
+        }
+      });
+      if (bottomMost) {
+        console.log('✅ Found contenteditable input at bottom');
+        return bottomMost;
+      }
+    }
+    
+    console.log('❌ Could not find input element');
     return null;
   }
   
-  function findAllElements(selectorList) {
-    const elements = [];
-    for (const selector of selectorList) {
-      try {
-        const found = document.querySelectorAll(selector);
-        found.forEach(el => {
-          if (isElementVisible(el) && !elements.includes(el)) {
-            elements.push(el);
+  function isValidInputElement(el) {
+    // Check if it's not too small (like a hidden input)
+    const rect = el.getBoundingClientRect();
+    return rect.width > 100 && rect.height > 20;
+  }
+  
+  function findGenerateButton() {
+    console.log('🔎 Looking for generate/send button...');
+    
+    // Strategy 1: Find button with send/arrow icon near the input
+    const input = findInputElement();
+    if (input) {
+      const inputRect = input.getBoundingClientRect();
+      const buttons = document.querySelectorAll('button');
+      
+      // Look for button to the right of input or below it
+      for (const btn of buttons) {
+        const btnRect = btn.getBoundingClientRect();
+        const isNearInput = (
+          // To the right of input
+          (btnRect.left >= inputRect.right - 100 && 
+           Math.abs(btnRect.top - inputRect.top) < 100) ||
+          // Below input (within 200px)
+          (btnRect.top >= inputRect.bottom - 50 && 
+           btnRect.top <= inputRect.bottom + 200)
+        );
+        
+        if (isNearInput && isElementVisible(btn)) {
+          // Check if it looks like a send button
+          const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+          const className = (btn.className || '').toLowerCase();
+          const innerHTML = btn.innerHTML.toLowerCase();
+          
+          // Check for arrow/send indicators
+          const isSendButton = (
+            ariaLabel.includes('send') ||
+            ariaLabel.includes('submit') ||
+            ariaLabel.includes('generate') ||
+            ariaLabel.includes('create') ||
+            className.includes('send') ||
+            className.includes('submit') ||
+            className.includes('arrow') ||
+            innerHTML.includes('arrow') ||
+            innerHTML.includes('send') ||
+            // SVG arrow check
+            btn.querySelector('svg path[d*="M"]') !== null
+          );
+          
+          if (isSendButton) {
+            console.log('✅ Found send button near input');
+            return btn;
           }
-        });
-      } catch (error) {
+        }
+      }
+      
+      // Fallback: Find the rightmost button near the input
+      let rightmostBtn = null;
+      let maxX = 0;
+      
+      for (const btn of buttons) {
+        const btnRect = btn.getBoundingClientRect();
+        const isNearInput = Math.abs(btnRect.top - inputRect.top) < 100 || 
+                           (btnRect.top >= inputRect.bottom - 20 && btnRect.top <= inputRect.bottom + 100);
+        
+        if (isNearInput && isElementVisible(btn) && btnRect.left > maxX) {
+          // Exclude buttons that are clearly not submit buttons
+          const text = btn.textContent?.toLowerCase() || '';
+          if (!text.includes('cancel') && !text.includes('clear') && !text.includes('close')) {
+            maxX = btnRect.left;
+            rightmostBtn = btn;
+          }
+        }
+      }
+      
+      if (rightmostBtn) {
+        console.log('✅ Found rightmost button near input');
+        return rightmostBtn;
+      }
+    }
+    
+    // Strategy 2: Try aria-label selectors
+    for (const selector of SELECTORS.generateButton) {
+      try {
+        const elements = document.querySelectorAll(selector);
+        for (const el of elements) {
+          if (isElementVisible(el) && el.tagName === 'BUTTON') {
+            console.log('✅ Found button via selector:', selector);
+            return el;
+          }
+        }
+      } catch (e) {
         continue;
       }
     }
-    return elements;
+    
+    console.log('❌ Could not find generate button');
+    return null;
   }
   
   function isElementVisible(element) {
     if (!element) return false;
+    const rect = element.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return false;
+    
     const style = window.getComputedStyle(element);
     return style.display !== 'none' && 
            style.visibility !== 'hidden' && 
-           style.opacity !== '0' &&
-           element.offsetParent !== null;
-  }
-  
-  function waitForElement(selectorList, timeout = 10000) {
-    return new Promise((resolve, reject) => {
-      const element = findElement(selectorList);
-      if (element) {
-        resolve(element);
-        return;
-      }
-      
-      const observer = new MutationObserver((mutations, obs) => {
-        const element = findElement(selectorList);
-        if (element) {
-          obs.disconnect();
-          resolve(element);
-        }
-      });
-      
-      observer.observe(document.body, {
-        childList: true,
-        subtree: true
-      });
-      
-      setTimeout(() => {
-        observer.disconnect();
-        reject(new Error('Element not found within timeout'));
-      }, timeout);
-    });
+           style.opacity !== '0';
   }
   
   // ============================================
-  // PROMPT SUBMISSION
+  // PROMPT SUBMISSION (FIXED)
   // ============================================
   async function submitPrompt(prompt, index, settings) {
     state.currentPrompt = prompt;
     state.settings = settings;
     state.detectedImages.clear();
+    state.submissionCount++;
     
-    console.log(`📝 Submitting prompt ${index + 1}: "${prompt.text.substring(0, 50)}..."`);
+    console.log(`\n${'='.repeat(50)}`);
+    console.log(`📝 SUBMITTING PROMPT ${index + 1}`);
+    console.log(`Text: "${prompt.text.substring(0, 80)}..."`);
+    console.log(`${'='.repeat(50)}`);
     
     try {
-      // Find and focus the input field
-      const inputElement = await waitForElement(SELECTORS.promptInput, 5000);
+      // Step 1: Find the input field
+      const inputElement = findInputElement();
       
       if (!inputElement) {
         throw new Error('Could not find prompt input field');
       }
       
-      // Clear existing text
-      clearInput(inputElement);
+      console.log('Step 1: ✅ Found input element');
       
-      // Type the prompt
-      await typeText(inputElement, prompt.text);
+      // Step 2: Clear and set the text
+      await setInputValue(inputElement, prompt.text);
+      console.log('Step 2: ✅ Text entered into input');
       
-      // Small delay before clicking generate
-      await sleep(500);
+      // Step 3: Wait a moment for any React state updates
+      await sleep(300);
       
-      // Find and click generate button
-      const generateButton = findElement(SELECTORS.generateButton);
+      // Step 4: Find the generate/send button
+      const generateButton = findGenerateButton();
       
       if (!generateButton) {
-        throw new Error('Could not find generate button');
+        console.log('⚠️ Generate button not found, trying keyboard submit...');
+        // Try pressing Enter as fallback
+        inputElement.dispatchEvent(new KeyboardEvent('keydown', { 
+          key: 'Enter', 
+          code: 'Enter', 
+          keyCode: 13,
+          bubbles: true 
+        }));
+        console.log('Step 3: ⚠️ Sent Enter key as fallback');
+      } else {
+        console.log('Step 3: ✅ Found generate button');
+        
+        // Step 5: Click the button with multiple methods
+        await clickButtonRobust(generateButton);
+        console.log('Step 4: ✅ Clicked generate button');
       }
       
-      // Click the generate button
-      clickElement(generateButton);
-      
-      console.log(`✅ Prompt ${index + 1} submitted successfully`);
+      console.log(`🎉 Prompt ${index + 1} submitted successfully!\n`);
       
       // Start monitoring for new images
       startImageMonitoring(prompt);
       
+      return true;
+      
     } catch (error) {
       console.error(`❌ Failed to submit prompt ${index + 1}:`, error);
       notifyGenerationFailed(prompt.id, error.message);
+      return false;
     }
   }
   
-  function clearInput(element) {
-    if (element.tagName === 'TEXTAREA' || element.tagName === 'INPUT') {
-      element.value = '';
-      element.dispatchEvent(new Event('input', { bubbles: true }));
-      element.dispatchEvent(new Event('change', { bubbles: true }));
-    } else if (element.contentEditable === 'true') {
-      element.innerHTML = '';
-      element.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-  }
-  
-  async function typeText(element, text) {
+  async function setInputValue(element, text) {
+    // Focus the element first
     element.focus();
+    await sleep(100);
     
+    // Clear existing content
     if (element.tagName === 'TEXTAREA' || element.tagName === 'INPUT') {
+      // Select all and delete
+      element.select();
+      document.execCommand('delete');
+      
+      // Set new value
       element.value = text;
-      element.dispatchEvent(new Event('input', { bubbles: true }));
-      element.dispatchEvent(new Event('change', { bubbles: true }));
-    } else if (element.contentEditable === 'true') {
-      element.innerHTML = text;
-      element.dispatchEvent(new Event('input', { bubbles: true }));
+      
+      // Dispatch events that React listens to
+      element.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+      element.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+      
+      // Also try setting via native input event
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement?.prototype || window.HTMLInputElement.prototype, 
+        'value'
+      )?.set;
+      
+      if (nativeInputValueSetter) {
+        nativeInputValueSetter.call(element, text);
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      
+    } else if (element.contentEditable === 'true' || element.getAttribute('role') === 'textbox') {
+      // For contenteditable
+      element.innerHTML = '';
+      element.textContent = text;
+      
+      // Dispatch input event
+      element.dispatchEvent(new InputEvent('input', { 
+        bubbles: true, 
+        cancelable: true,
+        inputType: 'insertText',
+        data: text
+      }));
     }
     
-    // Trigger keyup event for any listeners
-    element.dispatchEvent(new KeyboardEvent('keyup', { key: 'a' }));
+    // Trigger additional events
+    element.dispatchEvent(new KeyboardEvent('keyup', { key: 'a', bubbles: true }));
+    element.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
   }
   
-  function clickElement(element) {
-    element.focus();
-    element.click();
+  async function clickButtonRobust(button) {
+    console.log('🖱️ Attempting to click button...');
     
-    // Also dispatch mouse events
-    element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-    element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-    element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    // Method 1: Direct click
+    button.click();
+    await sleep(50);
+    
+    // Method 2: Focus and click
+    button.focus();
+    button.click();
+    await sleep(50);
+    
+    // Method 3: Mouse events
+    const rect = button.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    
+    const mouseDownEvent = new MouseEvent('mousedown', {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX: centerX,
+      clientY: centerY
+    });
+    
+    const mouseUpEvent = new MouseEvent('mouseup', {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX: centerX,
+      clientY: centerY
+    });
+    
+    const clickEvent = new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX: centerX,
+      clientY: centerY
+    });
+    
+    button.dispatchEvent(mouseDownEvent);
+    await sleep(50);
+    button.dispatchEvent(mouseUpEvent);
+    await sleep(50);
+    button.dispatchEvent(clickEvent);
+    
+    // Method 4: Pointer events (for modern browsers)
+    const pointerDown = new PointerEvent('pointerdown', {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX: centerX,
+      clientY: centerY
+    });
+    
+    const pointerUp = new PointerEvent('pointerup', {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX: centerX,
+      clientY: centerY
+    });
+    
+    button.dispatchEvent(pointerDown);
+    await sleep(50);
+    button.dispatchEvent(pointerUp);
+    
+    console.log('🖱️ Click events dispatched');
   }
   
   // ============================================
   // IMAGE MONITORING
   // ============================================
   function setupImageObserver() {
-    // Create mutation observer for detecting new images
     state.observer = new MutationObserver((mutations) => {
       if (!state.currentPrompt) return;
       
       for (const mutation of mutations) {
-        if (mutation.type === 'childList') {
-          checkForNewImages();
-        } else if (mutation.type === 'attributes' && mutation.attributeName === 'src') {
+        if (mutation.type === 'childList' || 
+            (mutation.type === 'attributes' && mutation.attributeName === 'src')) {
           checkForNewImages();
         }
       }
@@ -321,11 +553,9 @@
   }
   
   function startImageMonitoring(prompt) {
-    // Record current images to detect new ones
     const currentImages = getAllImages();
     state.lastImageCount = currentImages.length;
     
-    // Start observing
     state.observer.observe(document.body, {
       childList: true,
       subtree: true,
@@ -333,7 +563,7 @@
       attributeFilter: ['src']
     });
     
-    // Also poll for images (backup method)
+    // Poll for images every second
     const pollInterval = setInterval(() => {
       if (!state.currentPrompt || state.currentPrompt.id !== prompt.id) {
         clearInterval(pollInterval);
@@ -346,7 +576,6 @@
     setTimeout(() => {
       clearInterval(pollInterval);
       if (state.currentPrompt && state.currentPrompt.id === prompt.id) {
-        // Check if we got any images
         if (state.detectedImages.size === 0) {
           notifyGenerationFailed(prompt.id, 'Image generation timeout');
         }
@@ -373,7 +602,6 @@
         imageUrls.push(src);
       });
       
-      // Check if we have expected number of images
       const expectedCount = state.settings.outputCount || 2;
       if (state.detectedImages.size >= expectedCount) {
         notifyImagesGenerated(state.currentPrompt.id, imageUrls);
@@ -383,25 +611,12 @@
   
   function getAllImages() {
     const images = [];
+    const seen = new Set();
     
-    // Try to find images in output container first
-    const containers = findAllElements(SELECTORS.imageContainer);
-    
-    if (containers.length > 0) {
-      containers.forEach(container => {
-        const imgs = container.querySelectorAll('img');
-        imgs.forEach(img => {
-          if (isValidGeneratedImage(img)) {
-            images.push(img);
-          }
-        });
-      });
-    }
-    
-    // Also check for images with generated selectors
-    const generatedImages = findAllElements(SELECTORS.generatedImage);
-    generatedImages.forEach(img => {
-      if (isValidGeneratedImage(img) && !images.includes(img)) {
+    // Find all images on the page
+    document.querySelectorAll('img').forEach(img => {
+      if (isValidGeneratedImage(img) && !seen.has(img.src)) {
+        seen.add(img.src);
         images.push(img);
       }
     });
@@ -410,71 +625,61 @@
   }
   
   function isValidGeneratedImage(img) {
-    if (!img.src && !img.dataset.src) return false;
+    const src = img.src || img.dataset?.src || '';
+    if (!src) return false;
     
-    const src = img.src || img.dataset.src;
-    
-    // Check if it's a generated image (blob or data URL, or from Google's CDN)
+    // Check if it's a generated image
     if (src.startsWith('blob:') || 
         src.startsWith('data:image') ||
+        src.includes('googleusercontent') ||
         src.includes('generated') ||
         src.includes('output')) {
-      return true;
-    }
-    
-    // Check image dimensions (generated images are usually larger)
-    if (img.naturalWidth >= 256 && img.naturalHeight >= 256) {
-      return true;
+      
+      // Verify it's not too small (icons, etc.)
+      if (img.naturalWidth >= 200 || img.width >= 200) {
+        return true;
+      }
     }
     
     return false;
   }
   
   // ============================================
-  // IMAGE DOWNLOADING
+  // BLOB DOWNLOAD
   // ============================================
   async function downloadBlobImage(blobUrl, filename, promptId) {
     try {
       const response = await fetch(blobUrl);
       const blob = await response.blob();
       
-      // Convert blob to data URL
       const reader = new FileReader();
-      reader.onloadend = async () => {
-        const dataUrl = reader.result;
-        
-        // Send back to background for download
+      reader.onloadend = () => {
         chrome.runtime.sendMessage({
           type: 'DOWNLOAD_DATA_URL',
-          dataUrl: dataUrl,
+          dataUrl: reader.result,
           filename: filename,
           promptId: promptId
         });
       };
       reader.readAsDataURL(blob);
-      
     } catch (error) {
       console.error('Failed to download blob:', error);
     }
   }
   
   // ============================================
-  // OUTPUT COUNT CONTROL
+  // OUTPUT COUNT
   // ============================================
   async function setOutputCount(count) {
-    try {
-      const selector = findElement(SELECTORS.outputCountSelector);
-      if (selector) {
-        if (selector.tagName === 'SELECT') {
-          selector.value = count.toString();
-          selector.dispatchEvent(new Event('change', { bubbles: true }));
-        } else if (selector.tagName === 'INPUT') {
-          selector.value = count.toString();
-          selector.dispatchEvent(new Event('input', { bubbles: true }));
-        }
+    // Try to find and set output count selector
+    const selectors = ['select', 'input[type="number"]', '[class*="count"]'];
+    for (const sel of selectors) {
+      const el = document.querySelector(sel);
+      if (el) {
+        el.value = count.toString();
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        break;
       }
-    } catch (error) {
-      console.error('Failed to set output count:', error);
     }
   }
   
@@ -483,9 +688,8 @@
   // ============================================
   function getPageState() {
     return {
-      hasInputField: !!findElement(SELECTORS.promptInput),
-      hasGenerateButton: !!findElement(SELECTORS.generateButton),
-      hasImageContainer: !!findElement(SELECTORS.imageContainer),
+      hasInputField: !!findInputElement(),
+      hasGenerateButton: !!findGenerateButton(),
       imageCount: getAllImages().length,
       url: window.location.href,
       isProjectPage: window.location.href.includes('/project/')
@@ -501,8 +705,6 @@
       promptId: promptId,
       imageUrls: imageUrls
     });
-    
-    // Clear current prompt
     state.currentPrompt = null;
   }
   
@@ -512,7 +714,6 @@
       promptId: promptId,
       error: error
     });
-    
     state.currentPrompt = null;
   }
   
@@ -524,35 +725,8 @@
   }
   
   // ============================================
-  // VISUAL INDICATORS
-  // ============================================
-  function showIndicator(message, type = 'info') {
-    // Remove existing indicator
-    const existing = document.querySelector('.gfa-indicator');
-    if (existing) existing.remove();
-    
-    const indicator = document.createElement('div');
-    indicator.className = `gfa-indicator gfa-${type}`;
-    indicator.innerHTML = `
-      <div class="gfa-indicator-content">
-        <span class="gfa-indicator-icon"></span>
-        <span class="gfa-indicator-text">${message}</span>
-      </div>
-    `;
-    
-    document.body.appendChild(indicator);
-    
-    // Auto remove after 3 seconds
-    setTimeout(() => {
-      indicator.classList.add('gfa-fade-out');
-      setTimeout(() => indicator.remove(), 300);
-    }, 3000);
-  }
-  
-  // ============================================
   // INITIALIZE
   // ============================================
   initialize();
   
 })();
-

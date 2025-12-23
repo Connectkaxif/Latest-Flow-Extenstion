@@ -682,14 +682,24 @@ function updateWorkflowUI() {
 
 function updateProgressBar() {
   const total = state.prompts.length;
-  const completed = state.prompts.filter(p => 
-    p.status === 'completed' || p.status === 'failed'
-  ).length;
   
-  const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+  // Count submitted as partial progress, completed/failed as full progress
+  const submitted = state.prompts.filter(p => p.status === 'submitted').length;
+  const completed = state.prompts.filter(p => p.status === 'completed').length;
+  const failed = state.prompts.filter(p => p.status === 'failed').length;
   
-  elements.progressBar.style.width = `${percentage}%`;
-  elements.progressPercentage.textContent = `${percentage}%`;
+  // Each submitted prompt counts as 0.5 progress, completed/failed as 1
+  const progress = completed + failed + (submitted * 0.5);
+  const percentage = total > 0 ? Math.round((progress / total) * 100) : 0;
+  
+  // Cap at 100%
+  const cappedPercentage = Math.min(percentage, 100);
+  
+  elements.progressBar.style.width = `${cappedPercentage}%`;
+  elements.progressPercentage.textContent = `${cappedPercentage}%`;
+  
+  // Also update stats while we're here
+  updateStats();
 }
 
 // ============================================
@@ -719,22 +729,30 @@ function updateTimers() {
   const elapsed = Math.floor((Date.now() - state.workflow.startTime) / 1000);
   elements.elapsedTime.textContent = formatTime(elapsed);
   
-  // Calculate remaining time
+  // Calculate remaining time based on submitted prompts (more accurate)
   const total = state.prompts.length;
-  const completed = state.prompts.filter(p => 
-    p.status === 'completed' || p.status === 'failed' || p.status === 'submitted'
-  ).length;
-  const remaining = total - completed;
+  const submitted = state.prompts.filter(p => p.status === 'submitted').length;
+  const completed = state.prompts.filter(p => p.status === 'completed').length;
+  const failed = state.prompts.filter(p => p.status === 'failed').length;
+  const processed = submitted + completed + failed;
+  const remaining = total - processed;
   
-  if (completed > 0 && remaining > 0) {
-    const avgTimePerPrompt = elapsed / completed;
-    const estimatedRemaining = Math.ceil(avgTimePerPrompt * remaining);
+  if (processed > 0 && remaining > 0) {
+    // Use interval setting (2 seconds) for more accurate estimation
+    const intervalSeconds = state.settings.intervalSeconds || 2;
+    const estimatedRemaining = remaining * intervalSeconds;
     elements.remainingTime.textContent = formatTime(estimatedRemaining);
   } else if (remaining === 0) {
     elements.remainingTime.textContent = '00:00:00';
   } else {
-    elements.remainingTime.textContent = '--:--:--';
+    // Estimate based on total prompts * interval
+    const intervalSeconds = state.settings.intervalSeconds || 2;
+    const estimatedTotal = total * intervalSeconds;
+    elements.remainingTime.textContent = formatTime(estimatedTotal);
   }
+  
+  // Update progress bar on each tick
+  updateProgressBar();
 }
 
 function formatTime(seconds) {
