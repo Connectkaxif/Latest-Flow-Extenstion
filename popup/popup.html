@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Google Flow Automation Pro</title>
+  <link rel="stylesheet" href="popup.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-left">
+        <div class="logo">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="28" height="28" rx="8" fill="url(#gradient1)"/>
+            <path d="M8 14L12 18L20 10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <defs>
+              <linearGradient id="gradient1" x1="0" y1="0" x2="28" y2="28">
+                <stop offset="0%" stop-color="#6366F1"/>
+                <stop offset="100%" stop-color="#8B5CF6"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div class="header-title">
+          <h1>Flow Automation</h1>
+          <span class="version">v1.0.0</span>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="status-indicator" id="statusIndicator">
+          <span class="status-dot"></span>
+          <span class="status-text">Ready</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="app-main">
+      <!-- Connection Status -->
+      <section class="connection-section" id="connectionSection">
+        <div class="connection-card">
+          <div class="connection-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+          </div>
+          <div class="connection-info">
+            <span class="connection-label">Project Status</span>
+            <span class="connection-value" id="projectStatus">Not Connected</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings Panel -->
+      <section class="settings-section">
+        <!-- Output Count Selection -->
+        <div class="setting-group">
+          <label class="setting-label">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7"/>
+              <rect x="14" y="3" width="7" height="7"/>
+              <rect x="14" y="14" width="7" height="7"/>
+              <rect x="3" y="14" width="7" height="7"/>
+            </svg>
+            Images per Prompt
+          </label>
+          <div class="output-selector">
+            <button class="output-btn" data-count="1">1</button>
+            <button class="output-btn active" data-count="2">2</button>
+            <button class="output-btn" data-count="3">3</button>
+            <button class="output-btn" data-count="4">4</button>
+          </div>
+        </div>
+
+        <!-- Download Folder Selection -->
+        <div class="setting-group">
+          <label class="setting-label">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
+            Download Folder
+          </label>
+          <div class="folder-selector">
+            <input type="text" id="downloadFolder" placeholder="Select download folder..." readonly>
+            <button class="folder-btn" id="selectFolderBtn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Prompts Section -->
+      <section class="prompts-section">
+        <div class="section-header">
+          <h2>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <polyline points="10 9 9 9 8 9"/>
+            </svg>
+            Prompts
+          </h2>
+          <div class="prompts-stats">
+            <span class="stat-badge total" id="totalCount">0 Total</span>
+            <span class="stat-badge completed" id="completedCount">0 Done</span>
+            <span class="stat-badge failed" id="failedCount">0 Failed</span>
+          </div>
+        </div>
+
+        <!-- Upload Area -->
+        <div class="upload-area" id="uploadArea">
+          <div class="upload-content">
+            <div class="upload-icon">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+            </div>
+            <p class="upload-text">Drag & drop files here</p>
+            <p class="upload-subtext">or click to browse</p>
+            <p class="upload-formats">.txt, .doc, .docx, .pdf supported</p>
+          </div>
+          <input type="file" id="fileInput" multiple accept=".txt,.text,.doc,.docx,.pdf" hidden>
+        </div>
+
+        <!-- Paste Area -->
+        <div class="paste-area">
+          <textarea id="pasteInput" placeholder="Or paste prompts here (one per line)..."></textarea>
+          <button class="paste-btn" id="addPromptsBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Add Prompts
+          </button>
+        </div>
+
+        <!-- Prompts List -->
+        <div class="prompts-list-container">
+          <div class="prompts-list" id="promptsList">
+            <div class="empty-state" id="emptyState">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+              </svg>
+              <p>No prompts added yet</p>
+              <span>Upload a file or paste prompts above</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Progress Section -->
+      <section class="progress-section" id="progressSection" style="display: none;">
+        <div class="progress-header">
+          <h3>Workflow Progress</h3>
+          <span class="progress-percentage" id="progressPercentage">0%</span>
+        </div>
+        <div class="progress-bar-container">
+          <div class="progress-bar" id="progressBar"></div>
+        </div>
+        <div class="progress-stats">
+          <div class="time-stat">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+            <span>Elapsed: <strong id="elapsedTime">00:00:00</strong></span>
+          </div>
+          <div class="time-stat">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 8 14"/>
+            </svg>
+            <span>Remaining: <strong id="remainingTime">--:--:--</strong></span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer Controls -->
+    <footer class="app-footer">
+      <div class="control-buttons">
+        <button class="control-btn run" id="runBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+          </svg>
+          Run
+        </button>
+        <button class="control-btn pause" id="pauseBtn" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <rect x="6" y="4" width="4" height="16"/>
+            <rect x="14" y="4" width="4" height="16"/>
+          </svg>
+          Pause
+        </button>
+        <button class="control-btn stop" id="stopBtn" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <rect x="4" y="4" width="16" height="16" rx="2"/>
+          </svg>
+          Stop
+        </button>
+      </div>
+      <button class="clear-btn" id="clearBtn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="3 6 5 6 21 6"/>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+        </svg>
+        Clear All
+      </button>
+    </footer>
+
+    <!-- Project Selection Modal -->
+    <div class="modal-overlay" id="projectModal" style="display: none;">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>Select Project</h3>
+          <button class="modal-close" id="modalClose">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p>Where would you like to run this workflow?</p>
+          <div class="modal-buttons">
+            <button class="modal-btn same" id="sameProjectBtn">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                <polyline points="9 22 9 12 15 12 15 22"/>
+              </svg>
+              Same Project
+              <span>Continue in current project</span>
+            </button>
+            <button class="modal-btn new" id="newProjectBtn">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              New Project
+              <span>Create a fresh project</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast">
+      <div class="toast-icon"></div>
+      <span class="toast-message"></span>
+    </div>
+  </div>
+
+  <script src="popup.js" type="module"></script>
+</body>
+</html>
+

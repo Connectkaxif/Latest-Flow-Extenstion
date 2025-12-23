@@ -1,0 +1,252 @@
+/**
+ * Google Flow Automation Pro - Content Script Styles
+ * Visual indicators and overlays for the website
+ */
+
+/* Indicator Base */
+.gfa-indicator {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 999999;
+  padding: 12px 20px;
+  background: #1a1a2e;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(99, 102, 241, 0.2);
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 14px;
+  color: #f8fafc;
+  animation: gfa-slide-in 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.gfa-indicator-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gfa-indicator-icon {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: gfa-pulse 1.5s infinite;
+}
+
+.gfa-indicator-text {
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+/* Indicator Types */
+.gfa-info .gfa-indicator-icon {
+  background: #3b82f6;
+  box-shadow: 0 0 10px #3b82f6;
+}
+
+.gfa-success .gfa-indicator-icon {
+  background: #10b981;
+  box-shadow: 0 0 10px #10b981;
+}
+
+.gfa-warning .gfa-indicator-icon {
+  background: #f59e0b;
+  box-shadow: 0 0 10px #f59e0b;
+}
+
+.gfa-error .gfa-indicator-icon {
+  background: #ef4444;
+  box-shadow: 0 0 10px #ef4444;
+}
+
+/* Animations */
+@keyframes gfa-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes gfa-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.gfa-fade-out {
+  animation: gfa-fade-out 0.3s ease forwards;
+}
+
+@keyframes gfa-fade-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+}
+
+/* Processing Overlay */
+.gfa-processing-overlay {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16162a 100%);
+  border-radius: 14px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(99, 102, 241, 0.3);
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  animation: gfa-slide-up 0.3s ease;
+}
+
+.gfa-processing-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(99, 102, 241, 0.2);
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: gfa-spin 1s linear infinite;
+}
+
+@keyframes gfa-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes gfa-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.gfa-processing-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gfa-processing-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.gfa-processing-detail {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+/* Highlight Effect */
+.gfa-highlight {
+  position: relative;
+}
+
+.gfa-highlight::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 2px solid #6366f1;
+  border-radius: 8px;
+  animation: gfa-highlight-pulse 1.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes gfa-highlight-pulse {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
+  }
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 0 8px rgba(99, 102, 241, 0);
+  }
+}
+
+/* Progress Badge */
+.gfa-progress-badge {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16162a 100%);
+  border-radius: 100px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(99, 102, 241, 0.3);
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  animation: gfa-fade-in 0.3s ease;
+}
+
+@keyframes gfa-fade-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.gfa-progress-badge-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  border-radius: 50%;
+  color: white;
+}
+
+.gfa-progress-badge-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.gfa-progress-badge-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.gfa-progress-badge-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.gfa-progress-badge-subtitle {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.gfa-progress-badge-percentage {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px;
+  font-weight: 700;
+  color: #6366f1;
+}
+
